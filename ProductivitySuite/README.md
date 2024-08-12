@@ -12,3 +12,6 @@ OPEA Productivity Suite, is a powerful tool designed to streamline your workflow
 - Code Generation: Boost your coding productivity with our code generation feature. Simply provide a description of the functionality you require, and the application will generate the corresponding code snippets, saving you valuable time and effort.
 
 - User Context Management: Maintain a seamless workflow by managing your user's context within the application. Our context management system keeps track of your documents and chat history, allowing for personalized experiences.
+
+
+Refer to the [Xeon Guide](./docker/xeon/README.md) for more instructions on building docker images from source and running the application.

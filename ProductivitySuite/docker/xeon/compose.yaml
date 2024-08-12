@@ -335,6 +335,18 @@ services:
       MONGO_PORT: ${MONGO_PORT}
       COLLECTION_NAME: ${PROMPT_COLLECTION_NAME}
     restart: unless-stopped
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.2
+    container_name: keycloak-server
+    ports:
+      - 8080:8080
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_PROXY=edge
+    ipc: host
+    command: start-dev
+    restart: always
 networks:
   default:
     driver: bridge
