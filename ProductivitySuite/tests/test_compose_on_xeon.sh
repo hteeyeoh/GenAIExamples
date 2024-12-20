@@ -102,6 +102,82 @@ function start_services() {
         n=$((n+1))
     done
 }
+function check_http_status() {
+    local URL="$1"
+    local SERVICE_NAME="$2"
+    local INPUT_DATA="$3"
+    local HTTP_RESPONSE
+
+    case "$SERVICE_NAME" in
+        *"dataprep_upload_file"*)
+            cd $LOG_PATH
+            HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -F 'files=@./dataprep_file.txt' -H 'Content-Type: multipart/form-data' "$URL")
+            ;;
+        *"dataprep_upload_link"*)
+            HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -F 'link_list=["https://www.ces.tech/"]' "$URL")
+            ;;
+        *"dataprep_get"*)
+            HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -H 'Content-Type: application/json' "$URL")
+            ;;
+        *"dataprep_del"*)
+            HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -d '{"file_path": "all"}' -H 'Content-Type: application/json' "$URL")
+            ;;
+        *"docsum-xeon-backend-server"* | *"faqgen-xeon-backend-server"*)
+            local INPUT_DATA="messages=Text Embeddings Inference (TEI) is a toolkit for deploying and serving open source text embeddings and sequence classification models. TEI enables high-performance extraction for the most popular models, including FlagEmbedding, Ember, GTE and E5."
+            HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -F "$INPUT_DATA" -H 'Content-Type: multipart/form-data' "$URL")
+            ;;
+        *)
+            HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -d "$INPUT_DATA" -H 'Content-Type: application/json' "$URL")
+            ;;
+    esac
+
+    local HTTP_STATUS=$(echo $HTTP_RESPONSE | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
+
+    if [ "$HTTP_STATUS" -ne "200" ]; then
+        echo "[ $SERVICE_NAME ] HTTP status is not 200. Received status was $HTTP_STATUS"
+        exit 1
+    else
+        echo "[ $SERVICE_NAME ] HTTP status is 200. Checking content..."
+    fi
+}
+
+function check_response_body() {
+    local URL="$1"
+    local SERVICE_NAME="$2"
+    local INPUT_DATA="$3"
+    local EXPECTED_RESULT="$4"
+    local HTTP_RESPONSE
+
+    case "$SERVICE_NAME" in
+        *"dataprep_upload_file"*)
+            HTTP_RESPONSE=$(curl --silent -X POST -F 'files=@./dataprep_file.txt' -H 'Content-Type: multipart/form-data' "$URL")
+            ;;
+        *"dataprep_upload_link"*)
+            HTTP_RESPONSE=$(curl --silent -X POST -F 'link_list=["https://www.ces.tech/"]' "$URL")
+            ;;
+        *"dataprep_get"*)
+            HTTP_RESPONSE=$(curl --silent -X POST -H 'Content-Type: application/json' "$URL")
+            ;;
+        *"dataprep_del"*)
+            HTTP_RESPONSE=$(curl --silent -X POST -d '{"file_path": "all"}' -H 'Content-Type: application/json' "$URL")
+            ;;
+        *"docsum-xeon-backend-server"* | *"faqgen-xeon-backend-server"*)
+            local INPUT_DATA="messages=Text Embeddings Inference (TEI) is a toolkit for deploying and serving open source text embeddings and sequence classification models. TEI enables high-performance extraction for the most popular models, including FlagEmbedding, Ember, GTE and E5."
+            HTTP_RESPONSE=$(curl --silent -X POST -F "$INPUT_DATA" -H 'Content-Type: multipart/form-data' "$URL")
+            ;;
+        *)
+            HTTP_RESPONSE=$(curl --silent -X POST -d "$INPUT_DATA" -H 'Content-Type: application/json' "$URL")
+            ;;
+    esac
+
+    local RESPONSE_BODY=$(echo $HTTP_RESPONSE | sed -e 's/HTTPSTATUS\:.*//g')
+    if [[ "$RESPONSE_BODY" != *"$EXPECTED_RESULT"* ]]; then
+        echo "[ $SERVICE_NAME ] Content does not match the expected result: $RESPONSE_BODY"
+        exit 1
+    else
+        echo "[ $SERVICE_NAME ] Content is as expected."
+    fi
+}
 
 function validate_service() {
     local URL="$1"
@@ -110,43 +186,9 @@ function validate_service() {
     local DOCKER_NAME="$4"
     local INPUT_DATA="$5"
 
-    if [[ $SERVICE_NAME == *"dataprep_upload_file"* ]]; then
-        cd $LOG_PATH
-        HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -F 'files=@./dataprep_file.txt' -H 'Content-Type: multipart/form-data' "$URL")
-    elif [[ $SERVICE_NAME == *"dataprep_upload_link"* ]]; then
-        HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -F 'link_list=["https://www.ces.tech/"]' "$URL")
-    elif [[ $SERVICE_NAME == *"dataprep_get"* ]]; then
-        HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -H 'Content-Type: application/json' "$URL")
-    elif [[ $SERVICE_NAME == *"dataprep_del"* ]]; then
-        HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -d '{"file_path": "all"}' -H 'Content-Type: application/json' "$URL")
-    elif [[ $SERVICE_NAME == *"docsum-xeon-backend-server"* ]]; then
-	local INPUT_DATA="messages=Text Embeddings Inference (TEI) is a toolkit for deploying and serving open source text embeddings and sequence classification models. TEI enables high-performance extraction for the most popular models, including FlagEmbedding, Ember, GTE and E5."
-        HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -F "$INPUT_DATA" -H 'Content-Type: multipart/form-data' "$URL")
-    elif [[ $SERVICE_NAME == *"faqgen-xeon-backend-server"* ]]; then
-        local INPUT_DATA="messages=Text Embeddings Inference (TEI) is a toolkit for deploying and serving open source text embeddings and sequence classification models. TEI enables high-performance extraction for the most popular models, including FlagEmbedding, Ember, GTE and E5."
-        HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -F "$INPUT_DATA" -H 'Content-Type: multipart/form-data' "$URL")
-    else
-        HTTP_RESPONSE=$(curl --silent --write-out "HTTPSTATUS:%{http_code}" -X POST -d "$INPUT_DATA" -H 'Content-Type: application/json' "$URL")
-    fi
-    HTTP_STATUS=$(echo $HTTP_RESPONSE | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
-    RESPONSE_BODY=$(echo $HTTP_RESPONSE | sed -e 's/HTTPSTATUS\:.*//g')
-
     docker logs ${DOCKER_NAME} >> ${LOG_PATH}/${SERVICE_NAME}.log
-
-    # check response status
-    if [ "$HTTP_STATUS" -ne "200" ]; then
-        echo "[ $SERVICE_NAME ] HTTP status is not 200. Received status was $HTTP_STATUS"
-        exit 1
-    else
-        echo "[ $SERVICE_NAME ] HTTP status is 200. Checking content..."
-    fi
-    # check response body
-    if [[ "$RESPONSE_BODY" != *"$EXPECTED_RESULT"* ]]; then
-        echo "[ $SERVICE_NAME ] Content does not match the expected result: $RESPONSE_BODY"
-        exit 1
-    else
-        echo "[ $SERVICE_NAME ] Content is as expected."
-    fi
+    check_http_status "$URL" "$SERVICE_NAME" "$INPUT_DATA"
+    check_response_body "$URL" "$SERVICE_NAME" "$INPUT_DATA" "$EXPECTED_RESULT"
 
     sleep 1s
 }
